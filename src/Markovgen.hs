@@ -22,11 +22,12 @@ newtype Nodes a = Nodes { unNodes :: Map.Map (Seq.Seq a) (Edges a) }
 makeMChain :: (Ord a) => Int -> a -> [a] -> Nodes a
 makeMChain n term = Nodes . lastchain . foldl' go (Map.empty, Seq.replicate n term)
   where
+    combineEdges :: (Ord a) => Edges a -> Edges a -> Edges a
     combineEdges = ((.) . (.)) Edges $ on (Map.unionWith (+)) unEdges
     updateNodes chain n = 
-      Nodes . Map.insertWith combineEdges chain (Edges $ Map.singleton n 1) . unNodes
-    lastchain (mp, last) = mp
-    go = const
+      Map.insertWith combineEdges chain (Edges $ Map.singleton n 1)
+    lastchain x = fst $ go x term
+    go (mp, chain) n = (updateNodes chain n mp, Seq.drop 1 . (Seq.|> n) $ chain)
 
 someFunc :: IO ()
 someFunc = putStrLn "someFunc"

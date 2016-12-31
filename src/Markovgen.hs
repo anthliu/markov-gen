@@ -6,6 +6,7 @@ module Markovgen
     , trainExample
     , train
     , randomEdge
+    , randomChain
     , someFunc
     ) where
 
@@ -44,6 +45,15 @@ randomEdge e = do
   result <- uniform 1 total
   let (key, _) = head . dropWhile ((< result) . snd) $ weights
   return key
+
+randomChain :: (Ord a) => Int -> a -> Nodes a -> RVar [a]
+randomChain n term graph = go $ Seq.replicate n term
+  where
+    go xs = do
+      result <- randomEdge $ graph Map.! xs
+      if result == term
+        then return []
+        else fmap (result:) $ go (Seq.drop 1 . (Seq.|> result) $ xs)
 
 someFunc :: IO ()
 someFunc = putStrLn "someFunc"

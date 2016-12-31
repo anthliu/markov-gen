@@ -3,31 +3,47 @@
 module Markovgen
     ( Nodes
     , Edges
-    , makeMChain
+    , trainExample
+    , train
+    , randomEdge
     , someFunc
     ) where
 
 import qualified Data.Text as T
 import qualified Data.Map as Map
-import Control.Arrow ((***))
-import Data.Sequence as Seq
-import Data.List (foldl')
-import Data.Function (on)
 import Data.Random
+import Data.Sequence as Seq
+import Data.List (foldl', foldl1', mapAccumL)
+import Data.Function (on)
 
-newtype Edges a = Edges {unEdges :: Map.Map a Int}
+type Edges a = Map.Map a Int
 
-newtype Nodes a = Nodes { unNodes :: Map.Map (Seq.Seq a) (Edges a) }
+type Nodes a = Map.Map (Seq.Seq a) (Edges a)
 
-makeMChain :: (Ord a) => Int -> a -> [a] -> Nodes a
-makeMChain n term = Nodes . lastchain . foldl' go (Map.empty, Seq.replicate n term)
+combineEdges :: (Ord a) => Edges a -> Edges a -> Edges a
+combineEdges = Map.unionWith (+)
+
+combineNodes :: (Ord a) => Nodes a -> Nodes a -> Nodes a
+combineNodes = Map.unionWith combineEdges
+
+trainExample :: (Ord a) => Int -> a -> [a] -> Nodes a
+trainExample n term = lastchain . foldl' go (Map.empty, Seq.replicate n term)
   where
-    combineEdges :: (Ord a) => Edges a -> Edges a -> Edges a
-    combineEdges = ((.) . (.)) Edges $ on (Map.unionWith (+)) unEdges
     updateNodes chain n = 
-      Map.insertWith combineEdges chain (Edges $ Map.singleton n 1)
-    lastchain x = fst $ go x term
+      Map.insertWith combineEdges chain (Map.singleton n 1)
+    lastchain = fst . flip go term
     go (mp, chain) n = (updateNodes chain n mp, Seq.drop 1 . (Seq.|> n) $ chain)
+
+train :: (Ord a) => Int -> a -> [[a]] -> Nodes a
+train n term = foldl1' combineNodes . fmap (trainExample n term)
+
+randomEdge :: Edges a -> RVar a
+randomEdge e = do
+  let edges = Map.toList e
+  let (total, weights) = mapAccumL (\x y -> (x + snd y, fmap (+x) y)) 0 edges
+  result <- uniform 1 total
+  let (key, _) = head . dropWhile ((< result) . snd) $ weights
+  return key
 
 someFunc :: IO ()
 someFunc = putStrLn "someFunc"

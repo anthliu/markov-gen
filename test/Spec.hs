@@ -11,7 +11,7 @@ main = do
   let wordlist = words lorem
   putStrLn $ "Testing words: " ++ show wordlist
   let wordgraph = train 2 ' ' wordlist
-  result <- sample $ replicateM 10 $ randomEdge (wordgraph M.! (Seq.fromList "  "))
+  result <- sample $ replicateM 10 $ randomEdge ((unNodes wordgraph ) M.! (Seq.fromList "  "))
   putStrLn "Random Edges: "
   print result
   chains <- sample $ replicateM 10 $ randomChain 2 ' ' wordgraph

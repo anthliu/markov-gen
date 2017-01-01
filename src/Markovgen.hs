@@ -2,7 +2,11 @@
 
 module Markovgen
     ( Nodes
+    , unNodes
     , Edges
+    , unEdges
+    , singleEdge
+    , singleNode
     , trainExample
     , train
     , randomEdge
@@ -10,44 +14,52 @@ module Markovgen
     , someFunc
     ) where
 
-import qualified Data.Text as T
 import qualified Data.Map as Map
+import Data.Monoid
+import Control.Monad.State
 import Data.Random
 import Data.Sequence as Seq
 import Data.List (foldl', foldl1', mapAccumL)
-import Data.Function (on)
 
-type Edges a = Map.Map a Int
+newtype Edges a = Edges { unEdges :: Map.Map a Int }
 
-type Nodes a = Map.Map (Seq.Seq a) (Edges a)
+newtype Nodes a = Nodes { unNodes :: Map.Map (Seq.Seq a) (Edges a) }
 
-combineEdges :: (Ord a) => Edges a -> Edges a -> Edges a
-combineEdges = Map.unionWith (+)
+instance (Ord a) => Monoid (Edges a) where
+  mempty = Edges Map.empty
+  mappend (Edges a) (Edges b) = Edges $ Map.unionWith (+) a b
 
-combineNodes :: (Ord a) => Nodes a -> Nodes a -> Nodes a
-combineNodes = Map.unionWith combineEdges
+instance (Ord a) => Monoid (Nodes a) where
+  mempty = Nodes Map.empty
+  mappend (Nodes a) (Nodes b) = Nodes $ Map.unionWith mappend a b
+
+singleEdge :: a -> Edges a
+singleEdge = Edges . flip Map.singleton 1
+
+singleNode :: Seq.Seq a -> a -> Nodes a
+singleNode chain = Nodes . Map.singleton chain . singleEdge
+
+buildTraining :: Int -> a -> [a] -> [(Seq.Seq a, a)]
+buildTraining n term = flip evalState (Seq.replicate n term) . traverse go . (++ [term])
+  where
+    go :: (Monad m) => a -> StateT (Seq.Seq a) m (Seq.Seq a, a)
+    go x = state $ \chain -> ((chain, x), Seq.drop 1 . (Seq.|> x) $ chain)
 
 trainExample :: (Ord a) => Int -> a -> [a] -> Nodes a
-trainExample n term = lastchain . foldl' go (Map.empty, Seq.replicate n term)
-  where
-    updateNodes chain n = 
-      Map.insertWith combineEdges chain (Map.singleton n 1)
-    lastchain = fst . flip go term
-    go (mp, chain) n = (updateNodes chain n mp, Seq.drop 1 . (Seq.|> n) $ chain)
+trainExample n term = mconcat . fmap (uncurry singleNode) . buildTraining n term
 
 train :: (Ord a) => Int -> a -> [[a]] -> Nodes a
-train n term = foldl1' combineNodes . fmap (trainExample n term)
+train n term = mconcat . fmap (trainExample n term)
 
 randomEdge :: Edges a -> RVar a
-randomEdge e = do
+randomEdge (Edges e) = do
   let edges = Map.toList e
   let (total, weights) = mapAccumL (\x y -> (x + snd y, fmap (+x) y)) 0 edges
   result <- uniform 1 total
-  let (key, _) = head . dropWhile ((< result) . snd) $ weights
-  return key
+  return $ fst . head . dropWhile ((< result) . snd) $ weights
 
 randomChain :: (Ord a) => Int -> a -> Nodes a -> RVar [a]
-randomChain n term graph = go $ Seq.replicate n term
+randomChain n term (Nodes graph) = go $ Seq.replicate n term
   where
     go xs = do
       result <- randomEdge $ graph Map.! xs

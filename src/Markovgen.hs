@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 module Markovgen
     ( Nodes
     , unNodes
@@ -66,6 +64,3 @@ randomChain n term (Nodes graph) = go $ Seq.replicate n term
       if result == term
         then return []
         else fmap (result:) $ go (Seq.drop 1 . (Seq.|> result) $ xs)
-
-someFunc :: IO ()
-someFunc = putStrLn "someFunc"

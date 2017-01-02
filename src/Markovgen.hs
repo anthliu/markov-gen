@@ -9,7 +9,6 @@ module Markovgen
     , train
     , randomEdge
     , randomChain
-    , someFunc
     ) where
 
 import qualified Data.Map as Map
